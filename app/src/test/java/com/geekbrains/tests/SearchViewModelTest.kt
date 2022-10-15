@@ -15,7 +15,7 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.mockito.Mock
-import org.mockito.Mockito.`when`
+import org.mockito.Mockito.*
 import org.mockito.MockitoAnnotations
 import org.robolectric.annotation.Config
 
@@ -48,7 +48,7 @@ class SearchViewModelTest {
             val liveData = searchViewModel.subscribeToLiveData()
 
             `when`(repository.searchGithubAsync(SEARCH_QUERY)).thenReturn(
-                SearchResponse(1, listOf())
+                SearchResponse(INT_ONE, listOf())
             )
 
             try {
@@ -101,7 +101,106 @@ class SearchViewModelTest {
         }
     }
 
+    @Test //Проверим вызов метода searchGitHubAsync()
+    fun coroutines_search_Test() {
+        testCoroutineRule.runBlockingTest {
+            `when`(repository.searchGithubAsync(SEARCH_QUERY)).thenReturn(
+                SearchResponse(INT_ONE, listOf())
+            )
+
+            searchViewModel.searchGitHub(SEARCH_QUERY)
+            verify(repository, times(INT_ONE)).searchGithubAsync(SEARCH_QUERY)
+        }
+    }
+
+    @Test //Проверяем, что данные из репозитория проходят без изменений через LiveData и ViewModel
+    fun coroutines_TestReturnValueIsTheSame() {
+        testCoroutineRule.runBlockingTest {
+            val observer = Observer<ScreenState> {}
+            val liveData = searchViewModel.subscribeToLiveData()
+            val data = SearchResponse(INT_ONE, listOf())
+
+            `when`(repository.searchGithubAsync(SEARCH_QUERY)).thenReturn(
+                data
+            )
+
+            try {
+                liveData.observeForever(observer)
+                searchViewModel.searchGitHub(SEARCH_QUERY)
+                Assert.assertEquals(
+                    liveData.value, ScreenState.Working(data)
+                )
+            } finally {
+                liveData.removeObserver(observer)
+            }
+        }
+    }
+
+    @Test
+    fun coroutines_TestReturnValueIsNull() {
+        testCoroutineRule.runBlockingTest {
+            val observer = Observer<ScreenState> {}
+            val liveData = searchViewModel.subscribeToLiveData()
+
+            `when`(repository.searchGithubAsync(SEARCH_QUERY)).thenReturn(
+                null
+            )
+
+            try {
+                liveData.observeForever(observer)
+                searchViewModel.searchGitHub(SEARCH_QUERY)
+                val value: ScreenState.Error = liveData.value as ScreenState.Error
+                Assert.assertEquals(value.error.message, EXCEPTION_TEXT)
+            } finally {
+                liveData.removeObserver(observer)
+            }
+        }
+    }
+
+    @Test
+    fun coroutines_TestSearchResultsIsNull() {
+        testCoroutineRule.runBlockingTest {
+            val observer = Observer<ScreenState> {}
+            val liveData = searchViewModel.subscribeToLiveData()
+
+            `when`(repository.searchGithubAsync(SEARCH_QUERY)).thenReturn(
+                SearchResponse(INT_ONE, null)
+            )
+
+            try {
+                liveData.observeForever(observer)
+                searchViewModel.searchGitHub(SEARCH_QUERY)
+                val value: ScreenState.Error = liveData.value as ScreenState.Error
+                Assert.assertEquals(value.error.message, ERROR_TEXT)
+            } finally {
+                liveData.removeObserver(observer)
+            }
+        }
+    }
+
+    @Test
+    fun coroutines_TestTotalCountIsNull() {
+        testCoroutineRule.runBlockingTest {
+            val observer = Observer<ScreenState> {}
+            val liveData = searchViewModel.subscribeToLiveData()
+
+            `when`(repository.searchGithubAsync(SEARCH_QUERY)).thenReturn(
+                SearchResponse(null, listOf())
+            )
+
+            try {
+                liveData.observeForever(observer)
+                searchViewModel.searchGitHub(SEARCH_QUERY)
+                val value: ScreenState.Error = liveData.value as ScreenState.Error
+                Assert.assertEquals(value.error.message, ERROR_TEXT)
+            } finally {
+                liveData.removeObserver(observer)
+            }
+        }
+    }
+
     companion object {
+        private const val INT_ONE = 1
         private const val SEARCH_QUERY = "some query"
         private const val ERROR_TEXT = "Search results or total count are null"
         private const val EXCEPTION_TEXT = "Response is null or unsuccessful"
